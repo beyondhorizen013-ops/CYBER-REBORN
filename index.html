@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CYBER-REBORN: Storm Update</title>
+    <title>CYBER-REBORN: Named Units</title>
     <style>
         body { margin: 0; background: #050505; color: #00f2ff; font-family: 'Courier New', monospace; overflow: hidden; }
         canvas { display: none; background: #0a0a0a; cursor: crosshair; }
@@ -11,7 +11,7 @@
         .btn-play { padding: 15px 50px; font-size: 20px; letter-spacing: 3px; background: none; border: 2px solid #ff00ff; color: #ff00ff; cursor: pointer; transition: 0.3s; z-index: 110; }
         .btn-play:hover { background: #ff00ff; color: white; box-shadow: 0 0 20px #ff00ff; }
         #ui { position: absolute; top: 20px; left: 20px; display: none; pointer-events: none; z-index: 10; }
-        #kill-feed { position: absolute; top: 20px; right: 20px; width: 300px; text-align: right; color: #00f2ff; font-size: 12px; z-index: 10; }
+        #kill-feed { position: absolute; top: 20px; right: 20px; width: 300px; text-align: right; color: #00f2ff; font-size: 11px; z-index: 10; line-height: 1.4; }
         #storm-warning { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff00ff; font-size: 40px; font-weight: bold; display: none; z-index: 50; pointer-events: none; }
     </style>
 </head>
@@ -20,7 +20,7 @@
     <div id="menu">
         <div class="box">
             <h1 style="font-size: 45px; margin: 0; text-shadow: 0 0 10px #00f2ff;">CYBER-REBORN</h1>
-            <p style="color: #666; margin-bottom: 30px;">STORM UPDATE V1.1 - FIXED</p>
+            <p style="color: #666; margin-bottom: 30px;">V1.2: NAMED UNITS & LOOT</p>
             <button class="btn-play" id="playBtn">INITIALIZE MATCH</button>
         </div>
     </div>
@@ -31,7 +31,7 @@
         <div id="hp-bar" style="width: 200px; height: 15px; border: 2px solid #ff00ff; background: #222;">
             <div id="hp-inner" style="width: 100%; height: 100%; background: #ff00ff;"></div>
         </div>
-        <div id="status" style="font-size: 18px; margin-top: 5px;">PLAYERS: 100</div>
+        <div id="status" style="font-size: 16px; margin-top: 5px; color: #00f2ff;">UPLINK: ACTIVE | PLAYERS: 100</div>
     </div>
 
     <div id="kill-feed"></div>
@@ -43,126 +43,19 @@
     const playBtn = document.getElementById('playBtn');
     
     let gameActive = false, aliveCount = 100, zoneRadius = 4000;
-    let player = { x: 2500, y: 2500, hp: 100, lastShot: 0 };
-    let bots = [], bullets = [], structures = [], keys = {};
+    let player = { x: 2500, y: 2500, hp: 100, lastShot: 0, lootLevel: 0 };
+    let bots = [], bullets = [], structures = [], chests = [], medkits = [], keys = {};
     let lastShrink = Date.now();
 
-    // 1. Initialize Bots & World
+    const nameParts = ["NEON", "VOID", "CYBER", "GLITCH", "PROTO", "DATA", "Z-", "CHEESE", "NULL", "CORE"];
+    const nameEnds = ["STRIKER", "RUNNER", "BOT", "PHANTOM", "ALPHA", "REBEL", "UNIT", "LINK", "CRASH", "PRO"];
+
+    function generateName() {
+        return nameParts[Math.floor(Math.random()*nameParts.length)] + "_" + nameEnds[Math.floor(Math.random()*nameEnds.length)] + "_" + Math.floor(Math.random()*99);
+    }
+
     for(let i=0; i<99; i++) {
-        bots.push({ 
-            id: i, name: "UNIT_" + (i+1),
-            x: Math.random()*5000, y: Math.random()*5000, 
-            hp: 100, maxHp: 100, alive: true, 
-            vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, 
-            lastShot: 0, color: '#00f2ff'
-        });
+        bots.push({ id: i, name: generateName(), x: Math.random()*5000, y: Math.random()*5000, hp: 100, maxHp: 100, alive: true, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, lastShot: 0, color: '#00f2ff' });
     }
     for(let i=0; i<60; i++) structures.push({ x: Math.random()*4800, y: Math.random()*4800, w: 150, h: 150 });
-
-    function addKill(msg) {
-        const feed = document.getElementById('kill-feed');
-        const entry = document.createElement('div');
-        entry.innerText = "> " + msg;
-        feed.prepend(entry);
-        setTimeout(() => entry.remove(), 3000);
-    }
-
-    // THE BUTTON FIX:
-    playBtn.addEventListener('click', () => {
-        console.log("Match Initialized");
-        document.getElementById('menu').style.display = 'none';
-        document.getElementById('ui').style.display = 'block';
-        canvas.style.display = 'block';
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gameActive = true;
-        requestAnimationFrame(loop);
-    });
-
-    function shoot(u, tx, ty, isPlayer) {
-        const rate = isPlayer ? 200 : 1200;
-        if(Date.now() - u.lastShot < rate) return;
-        let ang = Math.atan2(ty - u.y, tx - u.x);
-        if(!isPlayer) ang += (Math.random()-0.5) * 0.2;
-        bullets.push({ x: u.x, y: u.y, vx: Math.cos(ang)*20, vy: Math.sin(ang)*20, isPlayer, ownerId: u.id || 'player' });
-        u.lastShot = Date.now();
-    }
-
-    function loop() {
-        if(!gameActive) return;
-
-        // Storm logic: Shrink every 60 seconds
-        if(Date.now() - lastShrink > 60000) {
-            zoneRadius *= 0.7;
-            lastShrink = Date.now();
-            document.getElementById('storm-warning').style.display = 'block';
-            setTimeout(() => { document.getElementById('storm-warning').style.display = 'none'; }, 3000);
-        }
-
-        // Controls
-        if(keys['w']) player.y -= 7; if(keys['s']) player.y += 7;
-        if(keys['a']) player.x -= 7; if(keys['d']) player.x += 7;
-        if(Math.hypot(player.x-2500, player.y-2500) > zoneRadius) player.hp -= 0.3;
-
-        // Bot behavior (Fights player and other bots)
-        bots.forEach(b => {
-            if(!b.alive) return;
-            b.x += b.vx; b.y += b.vy;
-            if(Math.hypot(b.x-2500, b.y-2500) > zoneRadius) {
-                b.hp -= 0.2;
-                let ang = Math.atan2(2500-b.y, 2500-b.x);
-                b.vx = Math.cos(ang)*3; b.vy = Math.sin(ang)*3;
-            }
-            if(b.x<0||b.x>5000) b.vx*=-1; if(b.y<0||b.y>5000) b.vy*=-1;
-
-            let distToPlayer = Math.hypot(b.x-player.x, b.y-player.y);
-            if(distToPlayer < 400) shoot(b, player.x, player.y, false);
-            else {
-                let target = bots.find(o => o.alive && o.id !== b.id && Math.hypot(b.x-o.x, b.y-o.y) < 350);
-                if(target) shoot(b, target.x, target.y, false);
-            }
-        });
-
-        // Bullets
-        for(let i=bullets.length-1; i>=0; i--) {
-            let blt = bullets[i];
-            blt.x += blt.vx; blt.y += blt.vy;
-            if(blt.isPlayer) {
-                bots.forEach(bot => { if(bot.alive && Math.hypot(blt.x-bot.x, blt.y-bot.y)<30) { bot.hp -= 35; if(bot.hp<=0){bot.alive=false; aliveCount--; addKill("DELETED UNIT");} bullets.splice(i,1); } });
-            } else {
-                if(Math.hypot(blt.x-player.x, blt.y-player.y)<25) { player.hp -= 5; bullets.splice(i,1); }
-                bots.forEach(bot => { if(bot.alive && bot.id !== blt.ownerId && Math.hypot(blt.x-bot.x, blt.y-bot.y)<30) { bot.hp -= 35; if(bot.hp<=0){bot.alive=false; aliveCount--; addKill("BOT COLLISION");} bullets.splice(i,1); } });
-            }
-        }
-
-        // Draw Game
-        ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.save(); ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
-        ctx.strokeStyle='#ff00ff'; ctx.lineWidth=10; ctx.beginPath(); ctx.arc(2500,2500,zoneRadius,0,Math.PI*2); ctx.stroke();
-        ctx.strokeStyle='#00f2ff'; ctx.lineWidth=2; structures.forEach(s => ctx.strokeRect(s.x, s.y, s.w, s.h));
-        
-        bots.forEach(b => {
-            if(!b.alive) return;
-            ctx.fillStyle = b.color; ctx.fillRect(b.x-15, b.y-15, 30, 30);
-            ctx.fillStyle = '#222'; ctx.fillRect(b.x-20, b.y-25, 40, 5);
-            ctx.fillStyle = '#ff00ff'; ctx.fillRect(b.x-20, b.y-25, 40 * (b.hp/b.maxHp), 5);
-        });
-
-        ctx.fillStyle='#fff'; bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 4));
-        ctx.restore();
-
-        // Draw Player UI
-        ctx.fillStyle='#00f2ff'; ctx.shadowBlur=15; ctx.shadowColor='#00f2ff'; ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20); ctx.shadowBlur=0;
-        document.getElementById('hp-inner').style.width = player.hp + "%";
-        document.getElementById('status').innerText = "PLAYERS ALIVE: " + aliveCount;
-
-        if(player.hp <= 0) location.reload();
-        else requestAnimationFrame(loop);
-    }
-
-    window.onkeydown=(e)=>keys[e.key.toLowerCase()]=true;
-    window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
-    window.onmousedown=(e)=> { if(gameActive) shoot(player, e.clientX-canvas.width/2+player.x, e.clientY-canvas.height/2+player.y, true); };
-</script>
-</body>
-</html>
+    for(let i=0; i<40; i++) chests.push({ x: Math.random()*5000, y: Math.random()*5000, active: true });
