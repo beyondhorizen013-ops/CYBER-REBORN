@@ -7,12 +7,12 @@
         body { margin: 0; background: #050505; color: #00f2ff; font-family: 'Courier New', monospace; overflow: hidden; }
         canvas { display: none; background: #0a0a0a; cursor: crosshair; }
         #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: radial-gradient(circle, #111 0%, #000 100%); z-index: 100; }
-        .box { padding: 50px; border: 2px solid #00f2ff; border-radius: 5px; text-align: center; background: rgba(0,0,0,0.8); box-shadow: 0 0 30px #00f2ff; }
-        .btn-play { padding: 15px 50px; font-size: 20px; letter-spacing: 3px; background: none; border: 2px solid #ff00ff; color: #ff00ff; cursor: pointer; transition: 0.3s; }
+        .box { padding: 50px; border: 2px solid #00f2ff; border-radius: 5px; text-align: center; background: rgba(0,0,0,0.9); box-shadow: 0 0 30px #00f2ff; }
+        .btn-play { padding: 15px 50px; font-size: 20px; letter-spacing: 3px; background: none; border: 2px solid #ff00ff; color: #ff00ff; cursor: pointer; transition: 0.3s; z-index: 110; }
         .btn-play:hover { background: #ff00ff; color: white; box-shadow: 0 0 20px #ff00ff; }
         #ui { position: absolute; top: 20px; left: 20px; display: none; pointer-events: none; z-index: 10; }
         #kill-feed { position: absolute; top: 20px; right: 20px; width: 300px; text-align: right; color: #00f2ff; font-size: 12px; z-index: 10; }
-        #storm-warning { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff00ff; font-size: 40px; font-weight: bold; display: none; z-index: 50; }
+        #storm-warning { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff00ff; font-size: 40px; font-weight: bold; display: none; z-index: 50; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -20,7 +20,7 @@
     <div id="menu">
         <div class="box">
             <h1 style="font-size: 45px; margin: 0; text-shadow: 0 0 10px #00f2ff;">CYBER-REBORN</h1>
-            <p style="color: #666; margin-bottom: 30px;">STORM UPDATE V1.1</p>
+            <p style="color: #666; margin-bottom: 30px;">STORM UPDATE V1.1 - FIXED</p>
             <button class="btn-play" id="playBtn">INITIALIZE MATCH</button>
         </div>
     </div>
@@ -40,13 +40,14 @@
 <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    const playBtn = document.getElementById('playBtn');
     
     let gameActive = false, aliveCount = 100, zoneRadius = 4000;
     let player = { x: 2500, y: 2500, hp: 100, lastShot: 0 };
     let bots = [], bullets = [], structures = [], keys = {};
     let lastShrink = Date.now();
 
-    // Setup Bots
+    // 1. Initialize Bots & World
     for(let i=0; i<99; i++) {
         bots.push({ 
             id: i, name: "UNIT_" + (i+1),
@@ -56,8 +57,6 @@
             lastShot: 0, color: '#00f2ff'
         });
     }
-
-    // Structures
     for(let i=0; i<60; i++) structures.push({ x: Math.random()*4800, y: Math.random()*4800, w: 150, h: 150 });
 
     function addKill(msg) {
@@ -68,7 +67,9 @@
         setTimeout(() => entry.remove(), 3000);
     }
 
-    document.getElementById('playBtn').onclick = () => {
+    // THE BUTTON FIX:
+    playBtn.addEventListener('click', () => {
+        console.log("Match Initialized");
         document.getElementById('menu').style.display = 'none';
         document.getElementById('ui').style.display = 'block';
         canvas.style.display = 'block';
@@ -76,21 +77,21 @@
         canvas.height = window.innerHeight;
         gameActive = true;
         requestAnimationFrame(loop);
-    };
+    });
 
     function shoot(u, tx, ty, isPlayer) {
         const rate = isPlayer ? 200 : 1200;
         if(Date.now() - u.lastShot < rate) return;
         let ang = Math.atan2(ty - u.y, tx - u.x);
         if(!isPlayer) ang += (Math.random()-0.5) * 0.2;
-        bullets.push({ x: u.x, y: u.y, vx: Math.cos(ang)*20, vy: Math.sin(ang)*20, isPlayer, ownerId: u.id });
+        bullets.push({ x: u.x, y: u.y, vx: Math.cos(ang)*20, vy: Math.sin(ang)*20, isPlayer, ownerId: u.id || 'player' });
         u.lastShot = Date.now();
     }
 
     function loop() {
         if(!gameActive) return;
 
-        // 1. Minute Storm Logic
+        // Storm logic: Shrink every 60 seconds
         if(Date.now() - lastShrink > 60000) {
             zoneRadius *= 0.7;
             lastShrink = Date.now();
@@ -98,23 +99,22 @@
             setTimeout(() => { document.getElementById('storm-warning').style.display = 'none'; }, 3000);
         }
 
-        // Move Player
+        // Controls
         if(keys['w']) player.y -= 7; if(keys['s']) player.y += 7;
         if(keys['a']) player.x -= 7; if(keys['d']) player.x += 7;
         if(Math.hypot(player.x-2500, player.y-2500) > zoneRadius) player.hp -= 0.3;
 
-        // Bot AI (Fights everything)
+        // Bot behavior (Fights player and other bots)
         bots.forEach(b => {
             if(!b.alive) return;
             b.x += b.vx; b.y += b.vy;
             if(Math.hypot(b.x-2500, b.y-2500) > zoneRadius) {
-                b.hp -= 0.2; // Storm damage for bots
+                b.hp -= 0.2;
                 let ang = Math.atan2(2500-b.y, 2500-b.x);
                 b.vx = Math.cos(ang)*3; b.vy = Math.sin(ang)*3;
             }
             if(b.x<0||b.x>5000) b.vx*=-1; if(b.y<0||b.y>5000) b.vy*=-1;
 
-            // Combat Targeting
             let distToPlayer = Math.hypot(b.x-player.x, b.y-player.y);
             if(distToPlayer < 400) shoot(b, player.x, player.y, false);
             else {
@@ -135,5 +135,34 @@
             }
         }
 
-        // Draw
-        ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width
+        // Draw Game
+        ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.save(); ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
+        ctx.strokeStyle='#ff00ff'; ctx.lineWidth=10; ctx.beginPath(); ctx.arc(2500,2500,zoneRadius,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle='#00f2ff'; ctx.lineWidth=2; structures.forEach(s => ctx.strokeRect(s.x, s.y, s.w, s.h));
+        
+        bots.forEach(b => {
+            if(!b.alive) return;
+            ctx.fillStyle = b.color; ctx.fillRect(b.x-15, b.y-15, 30, 30);
+            ctx.fillStyle = '#222'; ctx.fillRect(b.x-20, b.y-25, 40, 5);
+            ctx.fillStyle = '#ff00ff'; ctx.fillRect(b.x-20, b.y-25, 40 * (b.hp/b.maxHp), 5);
+        });
+
+        ctx.fillStyle='#fff'; bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 4));
+        ctx.restore();
+
+        // Draw Player UI
+        ctx.fillStyle='#00f2ff'; ctx.shadowBlur=15; ctx.shadowColor='#00f2ff'; ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20); ctx.shadowBlur=0;
+        document.getElementById('hp-inner').style.width = player.hp + "%";
+        document.getElementById('status').innerText = "PLAYERS ALIVE: " + aliveCount;
+
+        if(player.hp <= 0) location.reload();
+        else requestAnimationFrame(loop);
+    }
+
+    window.onkeydown=(e)=>keys[e.key.toLowerCase()]=true;
+    window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
+    window.onmousedown=(e)=> { if(gameActive) shoot(player, e.clientX-canvas.width/2+player.x, e.clientY-canvas.height/2+player.y, true); };
+</script>
+</body>
+</html>
